@@ -120,11 +120,20 @@ for line in delegates:
 ##TODO: move to a config file
 PAGE_HEIGHT=11*inch; PAGE_WIDTH=8.5*inch
 
+##TODO: specify fonts in config file; and/or include sensible defaluts in package
+    
 ttFile1 = "/Library/Fonts/HeadlineA.ttf"
-pdfmetrics.registerFont(TTFont("nameFont", ttFile1))
 ttFile2 = "/Library/Fonts/GillSans.ttc"
-pdfmetrics.registerFont(TTFont("twitFont", ttFile2))
 ttFile3 = "Arial Black.ttf"
+
+import os
+if os.uname()[1]=='pat-pangolin':
+    ttFile1 ='/usr/share/fonts/truetype/freefont/FreeSerif.ttf'
+    ttFile2 ='/usr/share/fonts/truetype/freefont/FreeSerif.ttf'
+    ttFile3 ='/usr/share/fonts/truetype/freefont/FreeSerif.ttf'
+
+pdfmetrics.registerFont(TTFont("nameFont", ttFile1))
+pdfmetrics.registerFont(TTFont("twitFont", ttFile2))
 pdfmetrics.registerFont(TTFont("bannerFont", ttFile3))
 #
 # Again, can make paragraph styles user-selectable
