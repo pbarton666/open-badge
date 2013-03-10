@@ -1,0 +1,25 @@
+'''
+Notes:
+
+probably want to package w/ a config file, separate sections for
+- graphics
+- label size
+- source configuration
+
+- probably want to build a package w/ the dependencies
+
+potentially want to have ability to include bar codes or equivalent to encode
+user's contact info (something scannable)
+
+there's some other programs out there including
+http://www.red-bean.com/labelnation
+
+there's a barcode generator that uses postscript at:
+http://code.google.com/p/elaphe/source/browse/trunk/elaphe/maxicode.py?r=48
+(not sure how well postscript encoding works and plays with pdf)
+
+There's a project that renders complex bar codes at.  Seems to work so far.
+Requires PIL (Python imaging library) and ghostscript.
+http://pypi.python.org/packages/source/e/elaphe/elaphe-0.5.3.tar.gz
+
+'''

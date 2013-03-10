@@ -34,11 +34,14 @@ from badge_utils import evb_reader, blanks, csv_reader
 #
 # Label Geometry: more of this should be computed
 #
+##TODO: move to a config file
 YS = tuple(x*inch for x in (7.0, 4.0, 1.0))
 XS = tuple(x*inch for x in (0.25, 4.25))
 
 LABEL_WIDTH = 4*inch
 LABEL_HEIGHT = 3*inch
+
+##TODO:  make this more generic (de-feather it)
 
 feather = PIL.Image.open("images/feather.png")
 scaling = 75.0/feather.size[0]
@@ -68,6 +71,7 @@ def pageBackground(canvas, doc):
     HM = 0.6*inch
     for y in YS:
         for x in XS:
+            ##TODO: move to a config file
             canvas.drawImage("images/bastion.png",
                     x+(LABEL_WIDTH/2.0)-inch, y+(LABEL_HEIGHT/2.0)-inch,
                     width=2*inch, height=2*inch, preserveAspectRatio=True)
@@ -80,6 +84,7 @@ def pageBackground(canvas, doc):
                         x+x1-fw/2, y+y1-fh/2, width=fw, height=fh,
                         preserveAspectRatio=True)
             if exhibitor:
+                ##TODO: move to a config file
                 canvas.setFont("bannerFont", 18)
                 for y1 in (VM, LABEL_HEIGHT-VM):
                     twidth = stringWidth("EXHBITOR", "bannerFont", 18)
@@ -112,7 +117,7 @@ for line in delegates:
     ticket = Ticket(*line)
     tickets[ticket.email].append(ticket)
 
-
+##TODO: move to a config file
 PAGE_HEIGHT=11*inch; PAGE_WIDTH=8.5*inch
 
 ttFile1 = "/Library/Fonts/HeadlineA.ttf"
