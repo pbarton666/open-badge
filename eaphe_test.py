@@ -1,5 +1,5 @@
-#this code, from https://code.google.com/p/elaphe works - it produces
-#  barcode image
+#this code, from https://code.google.com/p/elaphe proves that the elaphe 
+#   routine works - it produces a .png barcode image file
 
 from elaphe import barcode
 myBarcode = barcode('qrcode', 'Hello Barcode Writer In Pure PostScript.', 

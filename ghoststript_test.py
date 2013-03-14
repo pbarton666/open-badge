@@ -2,7 +2,7 @@
 
 '''this script comes from https://code.google.com/p/elaphe/ and is designed
 to test whether ghostscript is installed and accessible.  Upon execution, 
-it creates an image file with text called foo.png'''
+it creates an image file with text called foo.png and a black rectangle.'''
 
 from StringIO import StringIO
 from PIL.EpsImagePlugin import EpsImageFile
