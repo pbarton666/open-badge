@@ -39,11 +39,11 @@ class confReader():
         tmp = {}
         tmp.update({'label_width' : cb.label_width})
         tmp.update({'label_height' : cb.label_height})
-        tmp.update({'label_left_margin' : cb.hm})
-        tmp.update({'label_top_margin' : cb.vm})
-        tmp.update({'page_left_margin' : cb.LM})
+        tmp.update({'label_horiz_margin' : cb.hm})
+        tmp.update({'label_vert_margin' : cb.vm})
+        tmp.update({'page_horiz_margin' : cb.LM})
         tmp.update({'page_horiz_gap' : cb.XM})
-        tmp.update({'page_top_margin' : cb.TM})
+        tmp.update({'page_vert_margin' : cb.TM})
         tmp.update({'page_vert_gap' : cb.YM})
         tmp.update({'page_height' : cb.page_height})
         tmp.update({'page_width' : cb.page_width})   
@@ -62,16 +62,23 @@ class confReader():
         config.update({'paragraph_style': dict(cb.paragraph_style)})
         
         #text field formats
-        config.update({'text_field_format': dict(cb.font)})  
+        config.update({'text_field': dict(cb.text_field)})  
         
-        #basic badge layouts
-        config.update({"location": dict(cb.badge_layout)})      
+        #comman images (that is, common to all badges)
+        config.update({"common_images": dict(cb.common_images)})          
+        
+        #basic badge layouts  (note: this a list, not a dict)
+        config.update({"badge_layout": cb.badge_layout})   
         
         #tweaks for individual special ticket types
         config.update({"special_ticket": dict(cb.special_ticket)})         
 
         #labels preprinted
         config.update({"preprinted": cb.labels_preprintd})
+        
+        config.update({"common_images": cb.common_images})
+        
+        config.update({"double_badges": cb.double_badges})
         
         return config
 

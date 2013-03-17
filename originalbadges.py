@@ -32,7 +32,7 @@ from ticketspecs import specialtickets, ims, bastion, feather
 from badge_utils import evb_reader, blanks, csv_reader
 
 from config_reader import confReader
-from badge_utils import register_fonts, add_units
+from badge_utils import register_fonts, convert_units
 
 #grab the specifications
 reader = confReader()
@@ -41,7 +41,7 @@ config =reader.readFile()
 #register the fonts, adjust the config if necessary to adjust for duplicates
 config = register_fonts(config)
 #add the unit specifications to the label and paper dimensions
-config = add_units(config)
+config = convert_units(config)
 
 #Add label geometry; for readability, pull out the bits we need here
 page_left_margin = config['media_specs']['page_left_margin']
@@ -137,7 +137,6 @@ class Ticket:
         self.email = email
         self.twitter = twitter
         self.type = typ
-        self.fonts = {}
 
 ##TODO:  make a rule about collissions e.g., when adding different logos for multiple tutorial sessions        
 ##TODO:  for testing, print example of each badge type specified w/ fake information
@@ -150,7 +149,7 @@ fields = (3, 2, 4, 19, 6)
 #delegates = evb_reader("Attendees-3952423806.csv", fields, "utf-8")
 #delegates = evb_reader("Attendees-20130225.0247.csv", fields, "utf-8")
 #delegates = blanks(6)
-delegates = csv_reader("ManualBadges.csv", "utf-8")
+delegates = csv_reader("test_attendees.1730.csv", "utf-8")
 for line in delegates:
     ticket = Ticket(*line)
     tickets[ticket.email].append(ticket)
@@ -222,7 +221,7 @@ for y in YS:
         
 #create the page template - general specs for the entire sheet
 pt = PageTemplate(frames=frames, 
-                  pagesize=(page_width, page ), #page_height?
+                  pagesize=(page_width, page_height ), #page_height?
                   onPage=pageBackground,)
 #
 # Create the Document template - note that frames are absolutely

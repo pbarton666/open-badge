@@ -1,13 +1,28 @@
+from __future__ import division
+##TODO:  Images are not getting scaled.  this makes them too (tall/wide) to fit on the frame.
+
+'''
+reportlab.platypus.doctemplate.LayoutError: Flowable <Image at 0x950b56c 
+filename=./images/blob_black.png>(360.0 x 360.0) 
+too large on page 1 in frame None(276.0 x 204.0*) of template None
+
+'''
+
 """
 badge_utils.py: utility functions for badge printer input
 """
+
 import codecs
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.units import inch, mm
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER, TA_JUSTIFY
+from reportlab.platypus.flowables import Image
+from reportlab.platypus import (PageTemplate, BaseDocTemplate, Paragraph, 
+                                Table, TableStyle, Spacer, Frame, FrameBreak)
 
+from PIL import Image as PILImage
 
 def fsplit(line, N):
     """Parse a line from a CSV file and return the fields it contains
@@ -31,7 +46,8 @@ def fsplit(line, N):
     if len(line) != pos:
         print("***", line)
         print("Pos:", pos, "Remaining:", line[pos:])
-    assert pos == len(line) # sanity check
+    assert abs(pos -len(line)) <=1 # sanity check
+    #assert pos == len(line) # a bit too strict w/trailing /r/n, etc characters
     return fields
 
 def evb_reader(filename, fields, encoding):
@@ -48,8 +64,9 @@ def csv_reader(filename, encoding):
         if line.startswith("#"):
             continue
         cols = line[:-1].split(",")
-        yield tuple(cols+["manual"])
-
+        #yield tuple(cols+["manual"])  
+        #Do we really care that this is manual? If so Ticket must accept this arg.
+        yield tuple(cols)  
 def blanks(N):
     """Yields blank tickets to allow blank labels to be printed."""
     for i in range(N):
@@ -80,7 +97,7 @@ def register_fonts(config):
                 print "Sorry, I couldn't find font file '%s'" %ffile
                 raise
         else:  #otherwise, we need to know what the associated font name is
-            for k, v in fonts.iteritems():
+            for k, v in registered.iteritems():
                 #and map the user's (duplicate) font name to the one already registered
                 if ffile == v:
                     update_list.append((fname, k))  #(user provided name, registered name)
@@ -106,22 +123,37 @@ def register_fonts(config):
     config['paragraph_style'].update(pstyles)
     return config
     
-def add_units(config):
+def convert_units(config):
     '''
-    Adds units object (specified in inches or mm) to the paper/label dimensions. The "units"
+    Converts user-specified units to the paper/label dimensions. The "units"
     come from reportlab.lib.units (added to the config dict with configReader::confReader).
+    
     This makes the mainline code a bit more flexible and easy to read.
     '''
-    media = config['media_specs']  #note this a "live" copy of config; updates to media also update config
+    media = config['media_specs']  #note this a "live" copy of config; 
+    image= config['image']
     units = config['units']
 
     #important note to self.  You CANT simply iterate thru a dict an update it.  The deck can get reshuffled with
     #   every update - doubling up on some and leaving others out (potentially)
+    
+    #this takes care of units in the media specifications
     pending_updates =[]
+    #this takes care of units in the media specifications
     for spec, value in media.iteritems():    
-        pending_updates.append((spec, value*units))
+        pending_updates.append((spec, value*units)) 
     for p in pending_updates:
         media.update({p[0]:p[1]})
+
+    pending_updates =[]
+    #this takes care of units in the image specifications
+    for k,v in image.iteritems():    
+        #k is image name, 
+        fname, height, width = v
+        pending_updates.append((k, (fname, height *units, width * units) )) 
+    for p in pending_updates:
+        image.update({p[0]:p[1]})
+        
     #no need to update config, as media is a "live" copy of one of its elements
     return config
         
@@ -149,32 +181,143 @@ def convert_paragraph_style(config):
     for u in updates_pending:
         config['paragraph_style'].update({u[0]:u[1]})
     return config
-'''
-def read_delegate_file(config):
-    #calls appropariate reader, returns a list of delegates
-    filename, encoding, filetype = config['delegates_file']
-    if filetype =="custom_file":
-        return csv_reader(filename, encoding)
-    if filetype =="eventbright_file":
-        return evb_reader(filename, encoding)   
-    if filetype =="internet_file":
-        print "sorry, not yet implented"
-        return evb_reader(filename, encoding)  
-    return -1
-    
-    #delegates_file = ["test_attendees.1730.csv", "utf-8", "custom_file"]
-'''
+
 def generate_blobs(config):
     #may generate color blobs someday
     return config
-'''
->>> config['paragraph_style']
-{'organizerStyle': ('bannerFont', 'center', 18, 12, 12), 
-'vendorStyle': ('bannerFont', 'center', 18, 12, 12), 
+
+def getxy(image_name, loc, config):
+    '''Calculates the lower left position based on the image definition 
+    and a user-friendly location identification from the spec sheet.  
+    
+    For convenience, we've allowed the user to specify image locations in
+    terms of 'center', 'right', etc.  Reportlab thinks of image locations
+    in terms of the absolute (x,y) coordinates relative to the bottom,
+    left of the container object.
+    
+    Here, we translate.
+    ##TODO:  scale images
+    '''
+    image_height = config['image'][image_name][1]
+    image_width = config['image'][image_name][2]
+    label_height = config['media_specs']['label_height']
+    label_width = config['media_specs']['label_width']
+    vert_margin = config['media_specs']['label_vert_margin']
+    horiz_margin = config['media_specs']['label_horiz_margin']
+    
+    #grab the image location (specified in % of printable area)
+    xpct, ypct = config['location'][loc]
+    
+    print image_name
+    #y-coordinate stated in terms of position of bottom of element 
+    if ypct in [0, 50, 100]:  #special values
+        if ypct == 100:  #bottom
+            y = vert_margin 
+        elif ypct == 50:  #vertically centered
+            y = .5 * label_height - .5 * image_height
+        elif ypct == 0:  # top
+            #y = label_height - 2 *vert_margin - image_height
+            y = label_height -  vert_margin - image_height
+    else:
+        y = (label_height -  vert_margin) * (100 - ypct)/100
+            
+    #x-coordinate stated in terms of position of left of element
+    if xpct in [0, 50, 100]:  #special values   
+        if xpct == 0:  #left
+            x = horiz_margin
+        elif xpct == 50:  #horizontally centered
+            x = .5 * label_width - .5 * image_width
+        elif xpct == 100:  #right
+            x = label_width - image_width - horiz_margin
+    else:  #no special values
+        x = (label_width - 2 * horiz_margin) * (100 - xpct)/100
+    
+    return (x,y)    
+
+def fix_twitter(twit):
+    #if twitter handle doesn't come with a "@" add it
+    if len(twit) > 0:
+        if twit[0].strip() == '@':
+            pass
+        else: twit = '@' + twit
+    return twit
+
+ 
+def build_ticket(tix, config, main_elements, special_ticket_elements):
+    
+    '''
+    Combine the user's general badge specifications with any pertenant
+    to this ticket's special status (if applicable).  Then build a 
+    recipe ("story") using platypus objects.  This will serve as a
+    "flowable" stream of information to populate the individual badges.
+    '''
+    #make a dict so we can map text_field names (user provided) to 
+    #  ticket objects
+    tix_dict = {'first_name':tix[0].first, 
+                'last_name':tix[0].last,
+               'email':tix[0].email, 
+               'twitter_handle':fix_twitter(tix[0].twitter.strip()) }
+    
+    badge = main_elements
+    #knit in special elements (recursive so special elements can refer to each other)
+    for e in special_ticket_elements:
+        insert_after = e[len(e)-1]  #this is the tag after which we'll insert this element
+        tmp =[]
+        for b in badge:
+            tmp.append(b)
+            if b[0]==insert_after:
+                tmp.append(e)
+        badge = tmp[:]
+                
+     #we have our badge elements - so convert to platypus-friendly format
+    story = []
+    for b in badge:
+        elem = b[1]
+        #image file
+        if elem in config['image']:
+            fn, w, h = config['image'][elem]
+            raw_image= PILImage.open(fn) #this is a PIL Image object
+            new_image = raw_image.resize((int(w), int(h)))           
+            #story.append( Image(new_image) )
+            story.append(Image(fn, w, h))
+            
+        #text field 
+        elif elem in config['text_field']:         
+            #in case we have a null field value (no email, maybe) print a whitespace
+            #  this should force appropriate vertical spacing
+            if len(tix_dict[elem]) == 0:
+                text = " "
+            else:
+                text = tix_dict[elem]
+            p_style_name = config['text_field'][elem]
+            p_style = config['paragraph_style'][p_style_name]
+            story.append(Paragraph(text,           #value
+                                   p_style         #platypus ParagraphStyle 
+                                    ))        
+            
+        elif elem[0:6]=='spacer':
+            space_pct= int(elem[6:])/100
+            space_height = (config['media_specs']['label_height'] - 
+                            2 * config['media_specs']['label_vert_margin']) * space_pct
+            space_width = 1
+            #width is an arbitrary placeholder - should be OK, but...
+            story.append(Spacer(space_height, space_width))
+            
+        elif elem in ['null', 'end_tag']:  #these are just flags in the config file
+            pass
+            
+        else:  #if it's not an image, text_field, or spacer, we'll call it text
+            p_style = config['paragraph_style'][b[2]]
+            story.append(Paragraph(str(elem),         #text 
+                                   p_style) )         #a platypus ParagraghStyle
+    
+    story.append(FrameBreak())  #this completes the badge
+
+    #concantenate two copies if we're doing double-sided badges
+    if config['double_badges']:
+        return story + story
+    else:
+        return story
 
 
-tsty = ParagraphStyle("twitter",
-                        fontName="twitFont", fontSize=18, leading=24,
-                        alignment=TA_CENTER,
-                        spaceBefore=12, spaceAfter=12)
-'''
+ 

@@ -2,6 +2,31 @@
 Prints badges from an Eventbrite attendee CSV file.
 Configuration file is config-badge.py
 Prints two of each badge alongside to make double-sided badge production easier.
+
+ReportLab works with two separate components.  The canvas component sets up document
+template.  This includes graphics, page geometry, and "frames" (object containers).
+The platypus component can handle "flows" (data streams), populating the frames.
+
+The idea is that you can set up a frame as a "catcher's mitt".  When data
+is thrown at it, platypus is clever enough to populate the frames, moving onto
+the next one when the current one fills up, moving the next page when the current
+one fills up, etc.
+
+The best case scenario is a single docuent template that accommodates all the data.
+In a less-than-perfect world, the data needs to be separated then run against a
+canvas well-suited for it.
+
+Here, we'll try to design a canvas sufficiently generic that it can be used for all
+the permutations of the badges we can think of.  There are a couple of potential issues 
+(or maybe opportunities):  the elements overwrite one another (last declared wins); 
+since platypus tries to fill all the elements, we need placeholders for sparse
+entries.
+
+An alternative would to be to manually handle platypus' functions - not so bad here because
+all we need to track is badges/sheet and page breaks.  The drawback is that we'd have a 
+multi-page canvas that could get huge for large data sets.
+
+drawImage works from the lower, left corner (the x,y)
 """
 ##TODO:  why isn't exhibitor a ticket type?
 exhibitor = False
@@ -15,6 +40,12 @@ exhibitor = False
 # 4. That everything will always be happily US letter-sized.
 # 5. That the local filestore has data and image files present.
 #
+
+##TODO:  test special events
+##TODO:  test completeness of inputs
+##TODO: make framing an option
+##TODO:  test "y" specifications
+##TODO:  test decimal position specs
 from collections import defaultdict
 import reportlab
 from reportlab.platypus import (PageTemplate, BaseDocTemplate, Paragraph, 
@@ -25,14 +56,16 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER, TA_JUSTIFY
 from reportlab.pdfbase.pdfmetrics import stringWidth 
+from reportlab.lib import colors
 
 import PIL.Image
 
-from ticketspecs import specialtickets, ims, bastion, feather
-from badge_utils import blanks, generate_blobs#, read_delegate_file
+#from ticketspecs import specialtickets, ims, bastion, feather
+from badge_utils import blanks, generate_blobs
 
 from config_reader import confReader
-from badge_utils import register_fonts, add_units, convert_paragraph_style
+from badge_utils import register_fonts, convert_units, convert_paragraph_style, build_ticket, getxy
+
 
 #grab the raw specifications from the spec sheet
 reader = confReader()
@@ -43,17 +76,18 @@ config =reader.readFile()
 #register the fonts, adjust the config if necessary to adjust for duplicates
 config = register_fonts(config)
 #add the unit specifications to the label and paper dimensions
-config = add_units(config)
+config = convert_units(config)
 #convert user paragraph format specs to reportLab objects
 config = convert_paragraph_style(config)
+
 #create color blobs (to mark special tickets
 #config = generate_blobs(config)
 #blobs = [colorblobs[t.type] for t in tix if t.type in colorblobs] 
 
 
 #Add label geometry to namespace (mostly for readability)
-page_left_margin = config['media_specs']['page_left_margin']
-page_top_margin = config['media_specs']['page_top_margin']
+page_horiz_margin = config['media_specs']['page_horiz_margin']
+page_vert_margin = config['media_specs']['page_vert_margin']
 page_horizontal_gap = config['media_specs']['page_horiz_gap']
 page_vertical_gap = config['media_specs']['page_vert_gap']
 page_width = config['media_specs']['page_width']
@@ -61,21 +95,21 @@ page_height = config['media_specs']['page_height']
 #
 lab_width =config['media_specs']['label_width']
 lab_height=  config['media_specs']['label_height']
-lab_horizontal_margin = config['media_specs']['label_left_margin'] 
-lab_vertical_margin = config['media_specs']['label_top_margin'] 
+lab_horizontal_margin = config['media_specs']['label_horiz_margin'] 
+lab_vertical_margin = config['media_specs']['label_vert_margin'] 
                         
 #figure out rows/colums of labels based on effective height/width
-eff_page_width = page_width - 2 * page_left_margin #assumes r/l margins same
+eff_page_width = page_width - 2 * page_horiz_margin #assumes r/l margins same
 eff_label_width = lab_width + page_horizontal_gap
 label_cols = int(eff_page_width / eff_label_width)
 #
-eff_page_height = page_height - 2 * page_top_margin
+eff_page_height = page_height - 2 * page_vert_margin
 eff_lab_height = lab_height + page_vertical_gap 
 label_rows = int(eff_page_height / eff_lab_height)
 
 #horizontal and vertial starting points                     
-XS = tuple(page_left_margin+x*eff_label_width for x in range(0,label_cols))
-YS = tuple(page_top_margin+x*eff_lab_height for x in range(0,label_rows))           
+XS = tuple(page_horiz_margin+x*eff_label_width for x in range(0,label_cols))
+YS = tuple(page_vert_margin+x*eff_lab_height for x in range(0,label_rows))           
 #
 
 
@@ -95,7 +129,7 @@ class localDocTemplate(BaseDocTemplate):
     """Override the BaseDocTemplate class to do custom handle_XXX actions"""
 
     def __init__(self, *args, **kwargs):
-        """Couldn 't we just inherit __int__?"""
+        ##TODO:        """Couldn 't we just inherit __int__?"""
         BaseDocTemplate.__init__(self, *args, **kwargs)
 
 def pageBackground(canvas, doc):  
@@ -105,42 +139,24 @@ def pageBackground(canvas, doc):
     whatever else is required."""
     if preprinted:
         return
-    # saveState keeps a snapshot of the canvas state, so you don't
-    # mess up any rendering that platypus will do later.
-    canvas.saveState()
-    canvas.resetTransforms()
-    # Reset the origin to (0, 0), remember, we can restore the
-    # state of the canvas later, so platypus should be unaffected.
+
+    canvas.saveState()  #save current state of canvas
+    canvas.resetTransforms()  #resets origin to (0,0)
+    
+    #set elements in common for all badges
+
     for y in YS:
         for x in XS:
             ##grab a delegate from the delebate file
-    
-            
-            canvas.drawImage("images/bastion.png",
-                    x+(label_width/2.0)-inch, y+(label_height/2.0)-inch,
-                    width=2*inch, height=2*inch, preserveAspectRatio=True)
-            # canvas.drawImage("images/feather.png",
-            #         x, y,
-            #         width=0.5*inch, preserveAspectRatio=True)
-            for x1 in (lab_horizontal_margin, label_width-lab_horizontal_margin):
-                for y1 in (lab_vertical_margin, label_height-lab_vertical_margin):
-                    canvas.drawImage("images/feather.png",
-                        x+x1-fw/2, y+y1-fh/2, width=fw, height=fh,
-                        preserveAspectRatio=True)
-            if exhibitor:
-                ##TODO: move to a config file
-                canvas.setFont("bannerFont", 18)
-                for y1 in (lab_vertical_margin, label_height-lab_vertical_margin):
-                    twidth = stringWidth("EXHBITOR", "bannerFont", 18)
-                    canvas.drawCentredString(x+label_width/2, y+y1-6, "EXHIBITOR")
-    # Finally, restore the canvas back to the way it was.
+            for i in config['common_images']:
+                img_name, img_loc = i
+                img_file, img_height, img_width = config['image'][img_name]
+                label_x, label_y = getxy(img_name, img_loc, config)               
+                canvas.drawImage( img_file, x + label_x, y + label_y , width = img_width, 
+                                  height = img_height, preserveAspectRatio = True) 
     canvas.restoreState()
-#
-# If the following assertion fails you need more images
-#
-##don't need this if specs are separate
-assert len(specialtickets) <= len(ims)
-colorblobs = dict(zip(specialtickets, ims))
+
+
 class Ticket:
     def __init__(self, first, last, email, twitter, typ):
         self.first = first
@@ -148,27 +164,15 @@ class Ticket:
         self.email = email
         self.twitter = twitter
         self.type = typ
-        self.fonts = {}
-
-##TODO:  make a rule about collissions e.g., when adding different logos for multiple tutorial sessions        
-##TODO:  for testing, print example of each badge type specified w/ fake information
-
-#
-# Build a list of tickets held by each email address
-#
-tickets = defaultdict(lambda : [])
-fields = (3, 2, 4, 19, 6)
-#delegates = evb_reader("Attendees-3952423806.csv", fields, "utf-8")
-#delegates = evb_reader("Attendees-20130225.0247.csv", fields, "utf-8")
-#delegates = blanks(6)
-
+        
 #reads the delegates file
 delegates = config['delegates']
+
+#build list of tickets sorted by last, first
+tickets = defaultdict(lambda : [])
 for line in delegates:
     ticket = Ticket(*line)
-    tickets[ticket.email].append(ticket)
-    
-#sort them (this is by first_name, last_name)    
+    tickets[ticket.email].append(ticket)    
 tickets = tickets.items()
 tickets.sort(key=lambda t: (t[1][0].first.upper(), t[1][0].last.upper()))    
 
@@ -176,61 +180,39 @@ tickets.sort(key=lambda t: (t[1][0].first.upper(), t[1][0].last.upper()))
 frames = []
 for y in YS:
     for x in XS:
-        frames.append(Frame(x, y, lab_width, lab_height))
+        frames.append(Frame(x, y, lab_width, lab_height, showBoundary=1))   
         
 #create the page template - general specs for the entire sheet
 pt = PageTemplate(frames=frames, 
                   pagesize=(page_width, page_height ), 
                   onPage=pageBackground,)
-#
+
 # Create the Document template - note that frames are absolutely
 # positioned on the page, NOT relative to the margins
-#
-dt = localDocTemplate("badges.pdf",
-                      showBoundary=False,
-                      pageTemplates=[pt],
-                      leftMargin=0.0, 
-                      rightMargin=0.0, 
-                      topMargin=0.0, 
-                      bottomMargin=0.0)
 
-#Now, build a list that will serve to hold the label elements, 
-#  here called a "story"
+dt = localDocTemplate("badges.pdf", showBoundary=True, pageTemplates=[pt],
+                      leftMargin=0.0, rightMargin=0.0,topMargin=0.0, 
+                      bottomMargin=0.0)
 
 story = []
 
 for email, tix in tickets:
-    print tix[0].first  ###this is a debugging statement only
-    ##TODO:  what if an admin registered three people?  would they all get the same blobs?
-    ##TODO:  what if the same person registered twice, once for a tutorial?
-    ##TODO:  why not loop thru all the same (email, first) and consolidate ticket types?
-    #this builds an array of images, each representing a special ticket
-    blobs = [colorblobs[t.type] for t in tix if t.type in colorblobs]  #these are mini-logos for each tutorial
-    #non_blob_tix = sum(t.type not in colorblobs for t in tix)
-    #if non_blob_tix != 1:
-    #    print email,  non_blob_tix
-    t = tix[0].twitter.strip()
-    for _ in "front", "back":
-        # MORE ACCURATE, AND AUTOMATED, HEIGHT CALCULATIONS REQUIRED
-        # TO ALLOW GENERAL VERTICAL CENTERING OF ARBITRARY LAYOUTS
-        if not t:  #no twitter handle provided
-            story.append(Spacer(inch*3, inch/8.0))  ###a spacer object from reportLab.platypus
-        if not blobs:
-            story.append(Spacer(inch*3, inch/5.0))
-        #apply styles to the text bits (fsty is the style for the first name, etc.)
-        story.append(Paragraph(tix[0].first, fsty))  ###these are the paragraph formats
-        story.append(Paragraph(tix[0].last, lsty))
-        story.append(Paragraph(tix[0].email, esty))
-        if t:
-            story.append(Paragraph("@"+t, tsty))
-        if blobs:
-            story.append(Table([blobs]))  ###this is just a table of the mini-logos
-        story.append(FrameBreak())
-#
-# Having created the story (i.e., a label), we flow it through the pages i.e., 
-#  build the pdf document with  pdfdoc.py (part of PDFDocument package)
-#debug
+    ##TODO:  maybe make array of blobs, so one badge/participant?
+    ##TODO:  check for duplicates, multilpe reg. w/ one email?
+         
+    #build each ticket based on the "recipe" in the config     
+    main_elements = config['badge_layout']
+    if tix[0].type in config['special_ticket']:
+        special_ticket_elements = config['special_ticket'][tix[0].type]  #standard, special, etc.
+    else:
+        special_ticket_elements=[]
+   
+    story = story + build_ticket(tix, config, main_elements, special_ticket_elements)
+    
 for s in story:
     print s
-    print "***************"    
-dt.build(story)  ###looks like pdfdoc has logic to parse these out to the frames/pages???
+    print '****'
+
+dt.build(story)    
+
+    

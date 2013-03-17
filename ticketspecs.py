@@ -1,3 +1,8 @@
+'''
+This routine eliminated and moved to the config file
+'''
+'''
+
 #
 # In a production environment the use would select the ticket types
 # to be blobbed. This is a list of the special tickets that give
@@ -26,12 +31,12 @@ specialtickets = ["Migrating Complex Applications to OSGI - James to Karaf",
 # registers for attendance. This will mean hacking the "read and return
 # objects" code out into a separate module for commonality.
 #
-'''Would be much cleaner to specify a directory containing images to be used
+Would be much cleaner to specify a directory containing images to be used
 for a project in an external config file.  Would also be better to designate
 'conference_icon.png' and 'organizer_icon.png' 
 
 PJB'''
-
+'''
 image_names = "red redsq orangesq orange magenta green cyan bluesq blue black yellow"
 ims = []
 for color in image_names.split():
@@ -51,3 +56,4 @@ if __name__ == "__main__":
     c.showPage()
     c.save()
 
+'''
