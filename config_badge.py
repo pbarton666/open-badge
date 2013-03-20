@@ -32,7 +32,7 @@ double_badges = True        #True prints side-by-side badges
 # uncomment the following to use local data downloaded from Event Bright
 #    fields correspond to: [first_name, last_name, email, twitter_handle, ticket_type
 #    format: ("path/to/file/", "encoding", [fields_to_use], <tag - leave as is> )
-delegates_file = ["Attendees-20130223.1730.csv", "utf-8", [3, 2, 4, 19, 6], "eventbright_file"]
+delegates_file = ["test_attendees.csv", "utf-8", [3, 2, 4, 19, 6], "eventbright_file"]
 
 #uncomment the following to spec a URL/password download eventbright data directly
 ##TODO:  implement this
